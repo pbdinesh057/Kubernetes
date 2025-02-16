@@ -39,10 +39,10 @@ sudo mv kubectl /usr/local/bin/
 Add the following to your `~/.bashrc`:
 
 ```bash
-export NAME=cloudvishwakarma.in
-export KOPS_STATE_STORE=s3://cloudvishwakarma.in
+export NAME=dineshtopgun.xyz
+export KOPS_STATE_STORE=s3://dineshtopgun.xyz
 export AWS_REGION=us-east-1
-export CLUSTER_NAME=cloudvishwakarma.in
+export CLUSTER_NAME=dineshtopgun.xyz
 export EDITOR='/usr/bin/nano'
 ```
 
@@ -63,8 +63,8 @@ ssh-keygen -t ed25519 -C "your_email@example.com"
 
 Standard 3-Node Cluster:
 ```bash
-kops create cluster --name=cloudvishwakarma.in \
-    --state=s3://cloudvishwakarma.in \
+kops create cluster --name=dineshtopgun.xyz \
+    --state=s3://dineshtopgun.xyz \
     --zones=us-east-1a,us-east-1b \
     --node-count=2 \
     --control-plane-count=1 \
@@ -74,7 +74,7 @@ kops create cluster --name=cloudvishwakarma.in \
     --control-plane-volume-size 10 \
     --node-volume-size 10 \
     --ssh-public-key ~/.ssh/id_ed25519.pub \
-    --dns-zone=cloudvishwakarma.in \
+    --dns-zone=dineshtopgun.xyz \
     --dry-run --output yaml > cluster.yml
 ```
 
@@ -85,7 +85,7 @@ kops create cluster --name=cloudvishwakarma.in \
 kops create -f cluster.yml
 
 # Update the cluster
-kops update cluster --name cloudvishwakarma.in --yes --admin
+kops update cluster --name dineshtopgun.xyz --yes --admin
 
 # Validate the cluster
 kops validate cluster --wait 10m

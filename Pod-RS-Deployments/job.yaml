@@ -1,0 +1,171 @@
+#what is job in k8s
+#A Job creates one or more Pods and ensures that a specified number of them successfully terminate. As pods successfully complete, the Job tracks the successful completions. When a specified number of successful completions is reached, the task (ie, Job) is complete. Deleting a Job will clean up the Pods it created.
+
+#A simple example of a Job is one that runs a single Pod to completion. The Job in this example is well suited to the task because it runs the Pod to completion and then cleans up the Pod once it completes.
+
+#A Job can also be used to run multiple Pods in parallel.
+
+#disadvantages of job
+
+#Jobs are not suitable for applications that require persistent storage. If a Job is deleted before it completes, the Pods it created are not deleted. This can lead to resource leaks.
+
+
+#example of job
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+ name: pi
+spec:
+ template:
+   spec:
+     containers:
+     - name: pi
+       image: perl
+       command: ["perl",  "-Mbignum=bpi", "-wle", "print bpi(2000)"]
+     restartPolicy: Never
+ backoffLimit: 4
+
+---
+
+apiversion: batch/v1
+kind: Job
+metadata:
+  name: hello-world-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: hello-world
+        image: busybox
+        command: ['/bin/sh', '-c']
+        args: ['echo', 'Hello World']
+      restartPolicy: OnFailure
+  backoffLimit: 4  # Number of retries before considering a Job as failed
+
+
+#completion parameter is used to specify the number of pods that should complete successfully before the job is considered complete. If the completion parameter is not specified, the job will run until the specified number of retries is reached.
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-world-job-3
+spec:
+  backoffLimit: 3 # Number of retries before considering a Job as failed
+  completions: 10 # Number of successful completions required
+  template:
+    metadata:
+      name: hello-world-job-3
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: hello-world-container
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["echo 'Hello world'"]
+
+#The completions option was added here. Also, please notice that the args section was updated by us by adding the sleep 3 option. Using this option will make the task sleep for three seconds before completing, giving us enough time to notice the next Pod being created. Once you’ve applied this configuration file to your Kubernetes cluster, you can run the following command:
+
+
+
+
+#Running a task multiple times in parallel
+
+#The completions option ensures that the Pods are created one after the other. You can also enforce parallel execution using the parallelism option. If you do that, you can get rid of the completions option. Kubernetes Jobs can leverage parallelism to significantly speed up execution. By running multiple Pods concurrently, you distribute workload across your cluster, leading to faster completion times and improved resource utilization, especially for large or complex tasks. Here is the updated YAML file: 
+
+
+# hello-world-job-4.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-world-job-4
+spec:
+  backoffLimit: 3
+  parallelism: 5 # Number of Pods to run in parallel
+  template:
+    metadata:
+      name: hello-world-job-4
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: hello-world-container
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["echo 'Hello world'; sleep 3"]
+
+
+# $ kubectl get pods -w
+# NAME                      READY   STATUS              RESTARTS   AGE
+# hello-world-job-4-9dspk   0/1     ContainerCreating   0          7s
+# hello-world-job-4-n6qv9   0/1     Completed           0          7s
+# hello-world-job-4-pv754   0/1     ContainerCreating   0          7s
+# hello-world-job-4-ss4g8   1/1     Running             0          7s
+# hello-world-job-4-v78cj   1/1     Running             0          7s
+
+
+
+
+
+#Terminating a job after a specific amount of time
+
+#Sometimes, you may want to terminate a Job after a specific amount of time. This can be useful for tasks that are expected to complete within a certain timeframe. You can use the activeDeadlineSeconds option to specify the maximum amount of time a Job can run. If the Job does not complete within the specified timeframe, it will be terminated. Here is an example of how to use this option:
+
+# hello-world-job-5.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-world-job-5
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 60 # Maximum amount of time the Job can run
+  template:
+    metadata:
+      name: hello-world-job-5
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: hello-world-container
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["echo 'Hello world'"]
+
+
+#What happens if a job succeeds?
+
+#ttlSecondsAfterFinished
+#The ttlSecondsAfterFinished option is used to specify the amount of time a Job should remain active after it has completed successfully. This option is useful for cleaning up Jobs that are no longer needed. By default, Jobs are not deleted after they complete successfully. If you want to automatically delete Jobs after they complete, you can use the ttlSecondsAfterFinished option. Here is an example of how to use this option:
+
+
+# hello-world-job-6.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-world-job-6
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 30 # Time to live after the Job has finished
+  template:
+    metadata:
+      name: hello-world-job-6
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: hello-world-container
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["echo 'Hello world'"]
+
+
+
+#delete job
+
+#Keep in mind that the Pods that are created are bound to the life cycle of their parent. Deleting a job will result in deleting the Pods they manage.
+
+#If you want to delete the jobs but not the Pods it created, you need to add the --cascade=false parameter to the delete command:
+
+# $ kubectl delete job hello-world-job --cascade=false
+
+
+
+  #kubectl apply -f jobt.yaml
+  #kubectl get jobs

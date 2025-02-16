@@ -1,1 +1,42 @@
-Hi this is about pods
+#what is pod
+
+
+#Pod is the smallest deployable unit in kubernetes. A Pod represents a single instance of a running process in your cluster. Pods contain one or more containers, such as Docker containers. When a Pod runs multiple containers, the containers are managed as a single entity and share the Pod's resources.
+#Pods are always co-located and co-scheduled, and run in a shared context. A Pod models an application-specific "logical host" - it contains one or more application containers which are relatively tightly coupled. In non-cloud-native applications, it is common for multiple processes to be tightly coupled and to be run in the same host.
+
+#Pods in a Kubernetes cluster are used in two main ways:
+# Pods that run a single container. The "one-container-per-Pod" model is the most common Kubernetes use case; in this case, you can think of a Pod as a wrapper around a single container. To scale your application, you create multiple Pods, each with its copy of the container.
+
+# Pods that run multiple containers that need to work together. A Pod might encapsulate an application composed of multiple co-located containers that are tightly coupled and need to share resources. These co-located containers might form a single cohesive unit of service--one container serving files from a shared volume, while a separate "sidecar" container refreshes or updates those files. The Pod wraps these containers and storage resources together as a single manageable entity.
+
+#Pods are the atomic unit on the Kubernetes platform. When we create a Deployment on Kubernetes, that Deployment creates Pods with containers inside them (as opposed to creating containers directly). Each Pod is tied to the Node where it is scheduled, and remains there until termination (according to restart policy) or deletion. In case of a Node failure, identical Pods are scheduled on other available Nodes in the cluster.
+
+
+#example of pod
+
+apiVersion: v1
+kind: Pod
+metadata:
+ name: myapp-pod
+ labels:
+   app: myapp
+spec:
+ containers:
+ - name: nginx-container
+   image: nginx
+   ports:
+   - containerPort: 80
+#
+#kubectl apply -f pod.yml 
+#kubectl get pods
+#kubectl describe pod myapp-pod
+#kubectl delete pod myapp-pod
+#kubectl get pods
+#kubectl get pods -o wide
+#kubectl get pods --show-labels
+#kubectl get pods -n kube-system
+#kubectl get pods -n kube-system -o wide
+#kubectl get pods -n kube-system --show-labels
+#kubectl get pods -n kube-system -l tier=control-plane
+#kubectl get pods -n kube-system -l tier!=control-plane
+#kubectl get pods -n kube-system -l tier in (control-plane)

@@ -1,0 +1,105 @@
+#what is cronjob in k8s?
+
+#A CronJob creates Jobs on a repeating schedule. The schedule can be controlled by the cron syntax. A CronJob will run a Job at the specified interval until it is deleted. The Job will be created with a label that is the same as the CronJob's name. The CronJob will also create a deadline that is the sum of the .spec.startingDeadlineSeconds and the .spec.activeDeadlineSeconds. If the Job does not complete before the deadline, it will be terminated.
+
+# hello-world-cronjob.yaml
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: hello-world-cronjob
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          name: hello-world-cronjob
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: hello-world-container
+            image: busybox
+            imagePullPolicy: IfNotPresent
+            command: ["/bin/sh", "-c"]
+            args: ["echo 'Hello world'"]
+
+#explaination
+
+
+
+# ┌───────────── minute (0 - 59)
+# │ ┌───────────── hour (0 - 23)
+# │ │ ┌───────────── day of the month (1 - 31)
+# │ │ │ ┌───────────── month (1 - 12)
+# │ │ │ │ ┌───────────── day of the week (0 - 6) (Sunday to Saturday;
+# │ │ │ │ │                                   7 is also Sunday on some systems)
+# │ │ │ │ │                                   OR sun, mon, tue, wed, thu, fri, sat
+# │ │ │ │ │
+# * * * * * <command to execute>
+
+# “10 11 * * *" means “At 11:10 every day of every month.”
+# “10 11 * 12 *" means “At 11:10 every day of December.”
+# “10 11 * 12 1" means “At 11:10 of every Monday of December.”
+# “10 11 * * 1,2" means “At 11:10 of every Monday and Tuesday of every month.”
+# “10 11 * 2-5 *" means “At 11:10 every day from February to May.”
+
+
+
+
+
+#Controlling the CronJob execution deadline
+
+#The CronJob resource provides two fields to control the execution deadline of the Job: startingDeadlineSeconds and activeDeadlineSeconds. 
+#The startingDeadlineSeconds field specifies the deadline for starting the Job. If the Job does not start before the deadline, it will not be run. 
+#The activeDeadlineSeconds field specifies the maximum amount of time the Job can run. If the Job does not complete within the specified timeframe, it will be terminated. Here is an example of how to use these fields:
+
+# hello-world-cronjob-2.yaml  
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: hello-world-cronjob-2
+spec: 
+  schedule: "* * * * *" # Run every minute
+  startingDeadlineSeconds: 60 # Deadline for starting the Job
+  jobTemplate: # A JobTemplateSpec is a template for creating a Job.
+    spec:
+      template:
+        metadata:
+          name: hello-world-cronjob-2
+        spec:
+          activeDeadlineSeconds: 30 # Maximum amount of time the Job can run
+          restartPolicy: OnFailure
+          containers:
+          - name: hello-world-container
+            image: busybox
+            imagePullPolicy: IfNotPresent
+            command: ["/bin/sh", "-c"]
+            args: ["echo 'Hello world'"]
+
+
+
+#After the completion of a Cronjob, regardless of its success status, your Kubernetes cluster retains a history. The history setting can be configured at the CronJob level, allowing you to determine whether to preserve the history for each CronJob. If you choose to keep it, you can specify the number of entries to retain for both succeeded and failed jobs using the optional .spec.successfulJobsHistoryLimit and .spec.failedJobsHistoryLimit fields.
+
+# hello-world-cronjob.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hello-world-cronjob
+spec:
+  schedule: "*/1 * * * *"
+  # Run every minute
+  successfulJobsHistoryLimit: 5
+  startingDeadlineSeconds: 30
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          name: hello-world-cronjob
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: hello-world-container
+              image: busybox
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args: ["echo 'Hello world'"]

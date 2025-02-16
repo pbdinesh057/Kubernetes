@@ -1,0 +1,71 @@
+#what is depoyments in K8?
+
+# Deployments are used to create and manage pods.
+
+# more about deployments
+#A Deployment provides declarative updates to Pods and ReplicaSets. A Deployment is defined in a .yaml file and is used to create, update, and scale Pods and ReplicaSets. A Deployment allows you to describe an application’s life cycle, such as which images to use for the app, the number of Pods to run, and the way to update them.
+
+#Deployments are used to create and manage Pods. A Deployment is a higher-level API object that provides a declarative way to update Pods and ReplicaSets. A Deployment allows you to describe an application’s life cycle, such as which images to use for the app, the number of Pods to run, and the way to update them.
+
+# example of deployment
+# explaination
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: myapp-deployment
+ labels:
+   app: myapp
+spec:
+ replicas: 3
+ selector:
+   matchLabels:
+     app: myapp
+ template:
+   metadata:
+     labels:
+       app: myapp
+   spec:
+     containers:
+     - name: nginx-container
+       image: nginx
+       ports:
+       - containerPort: 80
+
+---
+
+#complex example of deployment
+#explaination
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: nginx-container
+        image: nginx
+        ports:
+        - containerPort: 80
+      - name: busybox-container
+        image: busybox
+        command: ['sh', '-c', 'echo Hello Kubernetes! && sleep 3600']
+      - name: alpine-container
+        image: alpine
+        command: ['sh', '-c', 'echo Hello Kubernetes! && sleep 3600']
+
+# #kubectl apply -f deployment.yml
+# #kubectl get deployments
+# #kubectl describe deployment myapp-deployment
+# #kubectl get pods
+# #kubectl get rs
