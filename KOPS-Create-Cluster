@@ -2,6 +2,7 @@
 
 This guide provides detailed steps for setting up a production-grade Kubernetes cluster on AWS using KOPS (Kubernetes Operations).
 
+KOPS is an official Kubernetes project that helps in creating, updating, and managing Kubernetes clusters on AWS. It simplifies the process of setting up a Kubernetes cluster by automating the deployment and configuration tasks.
 ## Prerequisites
 
 - AWS Account with administrative access
@@ -56,7 +57,7 @@ source ~/.bashrc
 ### 1. Generate SSH Keys
 
 ```bash
-ssh-keygen -t ed25519 -C "your_email@example.com"
+ssh-keygen
 ```
 
 ### 2. Create Cluster Configuration
@@ -84,7 +85,7 @@ kops create cluster --name=dineshtopgun.xyz \
 # Create the cluster
 kops create -f cluster.yml
 
-# Update the cluster
+# Update the cluster --admin flag to create an admin user
 kops update cluster --name dineshtopgun.xyz --yes --admin
 
 # Validate the cluster

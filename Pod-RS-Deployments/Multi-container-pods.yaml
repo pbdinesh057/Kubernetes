@@ -1,0 +1,23 @@
+#multi container pods
+
+#   https://github.com/PacktPublishing/The-Kubernetes-Bible-Second-Edition/tree/main/Chapter05
+
+# having multiple containers in a single pod is a common pattern in Kubernetes. This pattern is used when two or more containers need to work together and share resources. For example, a web server container and a logging container can be placed in the same pod. The web server container can write logs to a shared volume, and the logging container can read the logs from the shared volume and send them to a centralized logging system. This pattern is also used when a sidecar container is needed to enhance the functionality of the main container. For example, a sidecar container can be used to monitor the main container and send metrics to a monitoring system.
+
+# proxy container
+# The proxy container listens on port 80 and forwards incoming requests to the web server container on port 8080. The proxy container is responsible for routing traffic to the web server container. The proxy container is also responsible for handling TLS termination, load balancing, and other networking tasks. The proxy container is a sidecar container that enhances the functionality of the web server container.
+
+# multi-container-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-pod
+spec:
+  restartPolicy: Never
+  containers:
+    - name: nginx-container
+      image: nginx:latest
+    - name: debian-container
+      image: debian
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do date;echo debian-container; sleep 5 ; done"]
