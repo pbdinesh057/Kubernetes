@@ -21,3 +21,34 @@ spec:
       image: debian
       command: ["/bin/sh"]
       args: ["-c", "while true; do date;echo debian-container; sleep 5 ; done"]
+
+# failed-multi-container-pod.yaml
+# what happens when one of the containers in a pod fails
+# In this example, the nginx-container container is configured to use an image that does not exist. When the pod is created, the nginx-container container will fail to start, and the pod will be marked as failed. The debian-container container will continue to run, but the pod will be marked as failed because one of the containers failed to start.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-pod
+spec:
+  restartPolicy: Never
+  containers:
+    - name: nginx-container
+      image: nginx:i-do-not-exist
+    - name: debian-container
+      image: debian
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do date;echo debian-container; sleep 5 ; done"]
+
+
+
+# Understanding the Pod deletion grace period
+
+# Both single-container Pods and multi-container Pods have this grace period, which can be observed when you delete them. This grace period can be ignored by passing the --grace-period=0 --force option to the kubectl delete command.
+
+# $ kubectl delete pod failed-multi-container-pod --grace-period=0 --force
+# Warning: Immediate deletion does not wait for confirmation that the running resource has been terminated. The resource may continue to run on the cluster indefinitely.
+# pod "failed-multi-container-pod" force deleted
+
+
+#$ kubectl get pod/multi-container-pod -o jsonpath="{.spec.containers[*].name}"
