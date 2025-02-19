@@ -11,8 +11,8 @@
 
 #Pods are the atomic unit on the Kubernetes platform. When we create a Deployment on Kubernetes, that Deployment creates Pods with containers inside them (as opposed to creating containers directly). Each Pod is tied to the Node where it is scheduled, and remains there until termination (according to restart policy) or deletion. In case of a Node failure, identical Pods are scheduled on other available Nodes in the cluster.
 
-
-#example of pod
+#reference link
+#https://github.com/PacktPublishing/The-Kubernetes-Bible-Second-Edition/blob/main/Chapter04/
 
 apiVersion: v1
 kind: Pod
@@ -26,6 +26,8 @@ spec:
    image: nginx
    ports:
    - containerPort: 80
+
+   
 #
 #kubectl apply -f pod.yml 
 #kubectl get pods

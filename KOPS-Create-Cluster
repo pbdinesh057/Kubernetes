@@ -34,7 +34,15 @@ curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/$(cur
 chmod +x kubectl
 sudo mv kubectl /usr/local/bin/
 ```
+# kubectl auto completion
+sudo apt-get install bash-completion
 
+source <(kubectl completion bash)
+alias k=kubectl
+complete -o default -F __start_kubectl k
+
+
+#
 ### 3. Configure Environment Variables
 
 Add the following to your `~/.bashrc`:
