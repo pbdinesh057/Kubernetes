@@ -1,0 +1,184 @@
+# Understanding the need to set ResourceQuotas
+
+# Just as namespaces are used to isolate resources, ResourceQuotas are used to limit the amount of resources that can be used in a namespace. This is important because it helps prevent one namespace from consuming all the resources in a cluster. ResourceQuotas can be set for CPU, memory, and storage, and can be set for a namespace as a whole or for individual objects within a namespace.
+
+# Understanding how Pods consume these resources
+
+# When you launch a Pod on Kubernetes, a control plane component, known as kube-scheduler, will elect a compute node and assign the Pods to it. Then, the kubelet on the node will create the Pod and its containers. The kubelet will also monitor the containers and report their status back to the control plane. The kubelet will also enforce the resource limits set in the Pod's configuration. If a container exceeds its resource limits, the kubelet will kill the container and restart it. This is done to ensure that the container does not consume more resources than it is allowed to.
+
+# Understanding how Pods can require computing resources
+
+# The request and limit options will be declared within the YAML definition file of a Pod resource, or you can apply it to the running deployment using the kubectl set resource command. Here, we’re going to focus on the request option.
+
+# pod-in-namespace-with-request.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-with-request
+  namespace: custom-ns
+spec:
+  containers:
+    - name: nginx
+      image: nginx:latest
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "250m"
+
+# But what do these metrics mean?
+# Memory is expressed in bytes (one MiB is equal to 1,048,576 bytes), whereas CPU is expressed in millicores and allows fractional values. If you want your Pod to consume one entire CPU core, you can set the cpu key to 1000m. If you want two cores, you must set it to 2000m; for half of a core, it will be 500m or 0.5; and so on. However, to request a full CPU core, it’s simpler and more common practice to use the whole number (e.g., 2) instead of 2000m. So the preceding YAML definition says that the NGINX Pod we will create will forcibly need 512 MiB of memory, since memory is expressed in bytes, and one-quarter of a CPU core of the underlying compute node. There is nothing related to the CPU or memory frequency here. The CPU value is just a fraction of the CPU core.
+
+# Keep in mind that Pods cannot span multiple nodes. So if you set 8000m (which represents eight CPU cores) but your cluster is made up of two compute nodes with four cores each, then no compute node will be able to fulfill the request, and your Pod won’t be scheduled.
+
+
+# limits: its a maximum cpu is used pod performance is throttled and when memory is used pod is killed
+
+# pod-in-namespace-with-request-and-limit.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-with-request-and-limit
+  namespace: quota-ns
+spec:
+  containers:
+    - name: nginx
+      image: nginx:latest
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "250m"
+        limits:
+          memory: "1Gi"
+          cpu: "1000m"
+
+
+# pod-with-request-and-limit-1.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-with-request-and-limit-1
+  namespace: quota-ns
+spec:
+  containers:
+    - name: nginx
+      image: nginx:latest
+      resources:
+        requests:
+          memory: "100Gi"
+          cpu: "100m"
+        limits:
+          memory: "100Gi"
+
+
+# Understanding why you need ResourceQuota
+
+# ResourceQuotas are used to limit the amount of resources that can be used in a namespace. This is important because it helps prevent one namespace from consuming all the resources in a cluster. ResourceQuotas can be set for CPU, memory, and storage, and can be set for a namespace as a whole or for individual objects within a namespace.
+
+# ResourceQuota and LimitRange 
+
+# ResourceQuota is another resource kind, just like a Pod or ConfigMap. The workflow is quite simple and consists of two steps:
+
+# You must create a new namespace.
+# You must create a ResourceQuota and a LimitRange object inside that namespace.
+
+ResourceQuota is used to do the following:
+
+# Limit CPU consumption within a namespace
+# Limit memory consumption within a namespace
+# Limit the absolute number of objects such as Pods, Services, ReplicationControllers, Replicas, Deployments, etc. operating within a namespace
+# Limit consumption of storage resources based on the associated storage class
+
+# Creating a ResourceQuota
+
+# resourcequota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: resourcequota
+  namespace: quota-ns
+spec:
+  hard:
+    requests.cpu: "1000m"
+    requests.memory: "1Gi"
+    limits.cpu: "2000m"
+    limits.memory: "2Gi"
+
+# kubectl apply -f resourcequota.yaml
+
+# kubectl get quota -n quota-ns    
+
+
+# pod-with-request-and-limit-3.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-with-request-and-limit-3
+  namespace: quota-ns
+spec:
+  containers:
+    - name: nginx
+      image: nginx:latest
+      resources:
+        requests:
+          memory: "3Gi"
+          cpu: "100m"
+        limits:
+          memory: "4Gi"
+          cpu: "500m"
+
+# kubectl apply -f pod-with-request-and-limit-3.yaml
+# Error from server (Forbidden): error when creating "pod-with-request-and-limit-3.yaml": pods "nginx-with-request-and-limit-3" is forbidden: exceeded quota: resourcequota, requested: limits.memory=4Gi,requests.memory=3Gi, used: limits.memory=2Gi,requests.memory=1Gi, limited: limits.memory=2Gi,requests.memory=1Gi
+
+# quotas on number of objexts 
+
+# resourcequota-with-object-count.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: my-resourcequota
+  namespace: quota-ns
+spec:
+  hard:
+    requests.cpu: "1000m"
+    requests.memory: "1Gi"
+    limits.cpu: "2000m"
+    limits.memory: "2Gi"
+    configmaps: "10"
+    services: "5"
+
+
+
+# LimitRange
+# LimitRange is another resource kind, just like a Pod or ConfigMap. The workflow is quite simple and consists of two steps: 
+# You must create a new namespace.
+# You must create a LimitRange object inside that namespace.
+
+# limitrange.yaml
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: my-limitrange
+  namespace: quota-ns
+spec:
+  limits:
+    - default: # this section defines default limits for all containers in the namespace 
+        cpu: 500m
+        memory: 256Mi
+      defaultRequest: # this section defines default requests 
+        cpu: 500m
+        memory: 128Mi
+      max: # max and min define the limit range
+        cpu: "1"
+        memory: 1000Mi
+      min:
+        cpu: 100m
+        memory: 128Mi
+      type: Container
+
+
+As you can see, the LimitRange object consists of four important keys that all contain memory and cpu configuration. These keys are as follows:
+
+default: This helps you enforce default values for the memory and cpu limits of containers if you forget to apply them at the Pod level. Each container that is set up without limits will inherit these default ones from the LimitRange object.
+defaultRequest: This is the same as default but for the request option. If you don’t set a request option to one of your containers in a Pod, the ones from this key in the LimitRange object will be automatically used by default.
+max: This value indicates the maximum limit (not request) container that a Pod can set. You cannot configure a Pod with a limit value that is higher than this one. It is the same as the default value in that it cannot be higher than the one defined here.
+min: This value works like max but for requests. It is the minimum amount of computing resources that a Pod can request, and the defaultRequest option cannot be lower than this one.

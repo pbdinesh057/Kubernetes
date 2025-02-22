@@ -1,0 +1,54 @@
+# Namespaces in Kubernetes allow you to logically isolate parts of your cluster, helping you manage resources more effectively. However, to enforce resource allocation and limits, additional objects like ResourceQuotas are required. Once namespaces have been created, you can launch Kubernetes objects such as Pods, which will only exist in that namespace. So all the operations that are run against the cluster with kubectl will be scoped to that individual namespace, where you can perform as many operations as possible while eliminating the risk of impacting resources that are in another namespace.
+
+# How namespaces are used to split resources into chunks
+
+# Kubernetes namespaces serve several purposes for administrators, including:
+
+# Resource isolation
+# Scoping resource names
+# Hardware allocation and consumption limitation
+# Permissions and access control with Role-Based Access Control
+
+# custom-ns-2.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: custom-ns-2
+
+# We have to warn you about using the kubectl delete namespace command, as it is extremely dangerous. Deleting a namespace is permanent and definitive. All the resources that were created in the namespace will be destroyed. If you need to use this command, be sure to have YAML files to recreate the destroyed resources and even the destroyed namespace.
+
+# kubectl create ns custom-ns
+# $ kubectl run nginx --image nginx:latest -n custom-ns
+
+# pod-in-namespace.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx2
+  namespace: custom-ns
+spec:
+  containers:
+  - name: nginx
+    image: nginx:latest
+
+# $ kubectl get pods -n custom-ns
+# $ kubectl get pods --all-namespaces
+
+
+
+Setting the current namespace using kubectl config set-context:
+
+# kubectl config set-context --current --namespace=custom-ns
+# alias kubens='kubectl config set-context --current --namespace'
+# kubectl get all -n custom-ns
+
+same name pods can be deployed in different namespaces:
+
+# root@ip-10-0-1-60:~# k get po --all-namespaces |grep nginx
+# dinesh        nginx                                          1/1     Running    0              37s
+# harish        nginx                                          1/1     Running    0              32s
+
+Resolving a service using namespaces:
+
+#<service_name>.<namespace_name>.svc.cluster.local
+
