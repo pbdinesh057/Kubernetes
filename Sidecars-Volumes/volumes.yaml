@@ -1,0 +1,71 @@
+# what is pod volumes
+# pod volumes are used to store data in a pod. Volumes are defined at the pod level and can be shared between containers in the pod. Volumes are used to store data that needs to persist beyond the life of the pod. Volumes can be used to store data that needs to be shared between containers in the pod, or data that needs to be shared between pods.
+
+# different types of volumes
+
+# emptyDir: An emptyDir volume is created when a pod is created and is deleted when the pod is deleted. An emptyDir volume is used to store temporary data that needs to be shared between containers in the pod.
+
+# hostPath: A hostPath volume is used to mount a directory from the host machine into the pod. A hostPath volume is used to store data that needs to persist beyond the life of the pod.
+
+# configMap: A configMap volume is used to store configuration data in a pod. A configMap volume is used to store data that needs to be shared between containers in the pod.
+
+# nfs: An nfs volume is used to mount a directory from an nfs server into the pod. An nfs volume is used to store data that needs to persist beyond the life of the pod.
+
+# PVC: A PVC (PersistentVolumeClaim) volume is used to request storage from a storage class in the cluster. A PVC volume is used to store data that needs to persist beyond the life of the pod.
+
+# multi-container-with-emptydir-pod.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-with-emptydir-pod
+spec:
+  volumes:
+  - name: empty-dir-volume # name of the volume
+    emptyDir: {} # Initialize an empty directory # The path on the worker node.
+  containers:
+    - name: nginx-container
+      image: nginx:latest
+      volumeMounts:
+      - mountPath: /var/i-am-empty-dir-volume
+        name: empty-dir-volume
+    - name: debian-container
+      image: debian
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do sleep 30; done;"] # Prevents container from exiting after completion
+      volumeMounts:
+      - mountPath: /var/i-am-empty-dir-volume
+        name: empty-dir-volume
+
+# $ kubectl exec multi-container-with-emptydir-pod -c debian-container -- bin/sh -c "echo 'hello world' >> /var/i-am-empty-dir-volume/hello-world.txt"
+# $ kubectl exec multi-container-with-emptydir-pod -c nginx-container -- cat /var/i-am-empty-dir-volume/hello-world.txt
+# hello world
+# $ kubectl exec multi-container-with-emptydir-pod -c debian-container -- cat /var/i-am-empty-dir-volume/hello-world.txt
+# hello world
+
+
+# Creating and mounting a hostPath volume
+# The host machine is the machine running the Pod, and you can mount a directory from the file system of the host machine to the Kubernetes Pod! This is done using the hostPath volume type. The hostPath volume type mounts a directory from the host machine into the Pod. The hostPath volume type is used to store data that needs to persist beyond the life of the Pod.
+
+# multi-container-with-hostpath.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-with-hostpath
+spec:
+  containers:
+    - name: nginx-container
+      image: nginx:latest
+      volumeMounts:
+      - mountPath: /foo
+        name: my-host-path-volume
+    - name: debian-container
+      image: debian
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do sleep 30; done;"] # Prevents container from exiting after completion
+  volumes:
+  - name: my-host-path-volume
+    hostPath:
+      path: /tmp # The path on the worker node.
+      type: Directory

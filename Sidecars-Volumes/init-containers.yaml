@@ -1,0 +1,184 @@
+# what are init containers
+# Init containers are specialized containers that run before the application containers in a Pod. Init containers can contain utilities or setup scripts not present in an app image.
+
+#initContainers is a feature provided by Kubernetes Pods to run setup scripts before the actual containers start. You can think of them as additional side containers you can define in your Pod YAML manifest file: they will first run when the Pod is created. Then, once they complete, the Pod starts creating its main containers.
+
+# You can execute not one but several initContainers in the same Pod, but when you define lots of them, keep in mind that they will run one after another, not in parallel. Once an initContainer completes, the next one starts, and so on. In general, initContainers are used for preparation tasks; some of them are outlined in the following list:
+
+# Database initialization: Set up and configure databases before the main application starts.
+# Configuration file download: Download essential configuration files from remote locations.
+# Package installation: Install dependencies required by the main application.
+# Waiting for external service: Ensure external services are available before starting the main container.
+# Running pre-checks: Perform any necessary checks or validations before starting the main application.
+# Secret management: Download and inject secrets securely into the main container’s environment.
+# Data migration: Migrate data to a database or storage system before the main application starts.
+# Customizing file permissions: Set appropriate file permissions for the main application.
+
+# nginx-with-init-container.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-with-init-container
+  labels:
+    environment: prod
+    tier: frontend
+spec:
+  restartPolicy: Never
+  volumes:
+    - name: website-volume
+      emptyDir: {}
+  initContainers:
+    - name: download-website
+      image: busybox
+      command:
+        - sh
+        - -c
+        - |
+          wget https://github.com/iamgini/website-demo-one-page/archive/refs/heads/main.zip -O /tmp/website.zip && \
+          mkdir /tmp/website && \
+          unzip /tmp/website.zip -d /tmp/website && \
+          cp -r /tmp/website/website-demo-one-page-main/* /usr/share/nginx/html
+      volumeMounts:
+        - name: website-volume
+          mountPath: /usr/share/nginx/html
+  containers:
+    - name: nginx-container
+      image: nginx:latest
+      volumeMounts:
+        - name: website-volume
+          mountPath: /usr/share/nginx/html
+      ports:  
+        - containerPort: 80
+---
+
+# $ kubectl logs -f pods/multi-container-pod --container nginx-container
+
+# $ kubectl logs --since=2h pods/multi-container-pod --container nginx-container
+
+# $ kubectl logs --tail=30 pods/multi-container-pod --container nginx-container
+
+
+
+# The ambassador design pattern
+# The ambassador design pattern is a design pattern used in Kubernetes to provide a proxy or ambassador container that acts as an intermediary between the main container and the external world. The ambassador container is responsible for handling networking tasks such as routing traffic, load balancing, and TLS termination. The ambassador container is a sidecar container that enhances the functionality of the main container.
+# he whole idea is to get the ambassador container to proxy the requests run by the main container to the database server. 
+# In this case, the ambassador container will be essentially an SQL proxy. Every time the main container wants to access the database, it won’t access it directly but rather create a connection to the ambassador container that will play the role of a proxy.
+
+# Remember that the ambassador running in the same Pod as the NGINX container makes it accessible from NGINX on localhost:3306.
+
+# mysql-proxy-ambassador-container.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-with-ambassador
+spec:
+  containers:
+    - name: mysql-proxy-ambassador-container
+      image: mysql-proxy:latest
+      ports:
+         - containerPort: 3306
+      env:
+      - name: DB_HOST
+        value: mysql.xxx.us-east-1.rds.amazonaws.com
+    - name: nginx-container
+      image: nginx:latest
+
+
+# The sidecar design pattern
+
+# The sidecar design pattern is a design pattern used in Kubernetes to provide a sidecar container that enhances the functionality of the main container. The sidecar container is responsible for handling tasks such as logging, monitoring, and security. The sidecar container runs alongside the main container in the same Pod and shares the same lifecycle as the main container. The sidecar container is a separate entity from the main container and can be added or removed independently.
+# pattern is especially useful when you want to run monitoring or log forwarder agents
+
+# You must locate the directory where your main containers write their data (e.g., logs).
+# You must create a volume to make this directory accessible to the sidecar container (e.g., a log forwarder sidecar).
+# You must launch the sidecar container with the proper configuration.
+
+# When to use a Sidecar design pattern?
+# Network proxies: Network proxies can be configured to initialize before other containers in the Pod, ensuring their services are available immediately. The Istio “Envoy” proxy is a great example of a sidecar container used as a proxy.
+# Enhanced logging: Log collection sidecars can start early and persist until the Pod terminates, capturing logs reliably even in case of Pod crashes.
+# Jobs: Sidecars can be deployed alongside Kubernetes Jobs without affecting Job completion. No additional configuration is required for sidecars to run within Jobs.
+# Credential management: Many third-party credential management platforms utilize sidecar Pods to inject and manage credentials within workloads. They can also facilitate secure credential rotation and revocation.
+# Monitoring: Monitoring agents can be deployed as sidecars to collect metrics and monitor the health of the main container. This ensures that monitoring is always available, even if the main container crashes.
+# Security: Security agents can be deployed as sidecars to enforce security policies and monitor the network traffic of the main container. This ensures that security is always available, even if the main container is compromised.
+
+# nginx-with-fluentd-sidecar.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-with-sidecar
+spec:
+  volumes:
+    - name: log-volume
+      emptyDir: {}
+  containers:
+    - name: nginx-container
+      image: nginx:latest
+      ports:
+        - containerPort: 80
+      volumeMounts:
+        - name: log-volume
+          mountPath: /var/log/nginx
+    - name: fluentd-sidecar
+      image: fluent/fluentd:v1.17
+      volumeMounts:
+        - name: log-volume
+          mountPath: /var/log/nginx
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config-map
+  namespace: default
+data:
+  fluentd.conf: |
+    <source>
+      @type tail
+      path /var/log/nginx/*.log
+      pos_file /var/log/nginx/nginx.log.pos
+      tag nginx
+      <parse>
+        @type nginx
+      </parse>
+    </source>
+    <match nginx.**>
+      @type elasticsearch
+      host elastic.lab.example.com
+      port 9200
+      logstash_format true
+      logstash_prefix fluentd
+      logstash_dateformat %Y.%m.%d
+    </match>
+
+
+# The adapter design pattern
+
+# This design pattern is helpful and should be used whenever the main containers emit data in a format, A, that should be sent to another application that is expecting the data in another format, B. As the name suggests, the adapter container is here to adapt.
+
+#  this design pattern is especially well suited for log or monitoring management. Imagine a Kubernetes cluster where you have dozens of applications running; they are writing logs in Apache format, which you need to convert into JSON so that they can be indexed by a search engine. This is exactly where the adapter design pattern comes into play. Running an adapter container next to the application containers will help you get these logs adapted to the source format before they are sent somewhere else.
+
+# alpine-with-adapter.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-adapter
+spec:
+  containers:
+    - name: alpine-writer
+      image: alpine:latest
+      command: [ "sh", "-c", "i=1; while true; do echo \"$(date) - log $i\" >> /var/log/app/app.log; i=$((i+1)); sleep 5; done" ]
+      volumeMounts:
+        - name: log-volume
+          mountPath: /var/log/app
+      # adapter container
+    - name: log-adapter
+      image: alpine:latest
+      command: [ "sh", "-c", "while true; do cat /logs/app.log | sed 's/$/ PROCESSED/' > /logs/processed_app.log; cat /logs/processed_app.log; sleep 10; done" ]
+      volumeMounts:
+        - name: log-volume
+          mountPath: /logs
+  volumes:
+    - name: log-volume
+      emptyDir: {}

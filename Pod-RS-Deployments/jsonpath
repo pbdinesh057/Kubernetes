@@ -1,0 +1,8 @@
+# what is jsonath?
+# it is a way to extract data from json or yaml
+# explanation: https://kubernetes.io/docs/reference/kubectl/jsonpath/
+# example: kubectl get pods -o jsonpath='{.items[*].metadata.name}'
+# example: kubectl get pods -o jsonpath='{.items[*].spec.containers[*].name}'
+# example: kubectl get pods -o jsonpath='{.items[*].status.phase}'
+# example: kubectl get pods -o jsonpath='{.items[*].status.phase}{"\n"}' 
+# kubectl get pod/multi-container-pod -o jsonpath="{.spec.containers[*].name}"
