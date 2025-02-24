@@ -1,0 +1,184 @@
+#   Cluster networking in Kubernetes?
+
+#   Container-to-container communication: This is solved using Pods, allowing containers within the same Pod to communicate through localhost (i.e., internal communication).
+#   Pod-to-pod communication: Kubernetes enables communication between Pods across nodes through its networking model.
+#   Pod-to-service communication: Services abstract a set of Pods and provide stable endpoints for communication.
+#   External-to-service communication: This allows traffic from outside the cluster to access Services, such as web applications or APIs.
+
+
+#   IP address management in Kubernetes
+
+#   Kubernetes uses the Container Network Interface (CNI) to manage IP addresses. CNI plugins are responsible for assigning IP addresses to Pods and managing network configurations. The CNI plugin is typically provided by the network overlay solution used in the cluster, such as Calico, Flannel, or Weave Net.
+
+#   Kubernetes assigns each Pod an IP address from the Pod CIDR range, which is a subnet allocated to each node for Pod networking. The CNI plugin is responsible for assigning IP addresses within this range and ensuring that Pods can communicate with each other across nodes.
+
+#   Pods: A network plugin, often a Container Network Interface (CNI) plugin, assigns IP addresses to Pods.
+#   Services: The kube-apiserver handles assigning IP addresses to Services.
+#   Nodes: IP addresses for Nodes are managed by either the kubelet or the cloud-controller-manager.
+
+
+
+#  CNI
+
+#   purpose is to standardize the configuration of network interfaces on Linux containers, enabling seamless communication between containers and the external environment.
+
+#   These plugins are essential for implementing the Kubernetes network model, ensuring connectivity and communication within the cluster. It’s crucial to choose a CNI plugin that aligns with the needs and compatibility requirements of your Kubernetes cluster. With various plugins available in the Kubernetes ecosystem, both open-source and closed-source, selecting the appropriate plugin is vital for smooth cluster operations.
+
+
+#   What is a service mesh?
+
+#   A service mesh is a dedicated infrastructure layer that manages service-to-service communication in a microservices architecture. It provides features such as service discovery, load balancing, encryption, and observability, allowing developers to focus on building and deploying services without worrying about the underlying network complexity.
+
+
+#   Understanding how to call a Service in Kubernetes
+
+#   When you create a Service in Kubernetes, it will be attached to two very important things, as follows:
+
+#   An IP address that will be unique and specific to it (just as Pods get their own IP)
+#   An automatically generated internal DNS name that won’t change and is staticUnderstanding how to call a Service in Kubernetes
+#   When you create a Service in Kubernetes, it will be attached to two very important things, as follows:
+
+#   An IP address that will be unique and specific to it (just as Pods get their own IP)
+#   An automatically generated internal DNS name that won’t change and is static
+
+
+
+# k8sutils.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: k8sutils
+  namespace: default
+spec:
+  containers:
+    - name: k8sutils
+      image: quay.io/iamgini/k8sutils:debian12
+      command:
+        - sleep
+        - "infinity"
+      # imagePullPolicy: IfNotPresent
+  restartPolicy: Always
+
+# kubectl exec -it k8sutils -- curl nginx.default.svc.cluster.local
+
+# We successfully called the nginx Service by using the k8sutils debug Pod.
+
+
+# service object function
+
+# You create some Pods, and you set the labels arbitrarily.
+# You create a Service and configure its selector to match the Pods’ labels.
+# The Service starts and looks for Pods that match its selector.
+# You call the Service through its DNS or its IP (DNS is way easier).
+# The Service forwards the traffic to one of the Pods that matches its labels.
+
+
+
+# NodePort
+#  A NodePort Service exposes the Service on each Node’s IP at a static port. A ClusterIP Service, to which the NodePort Service routes, is automatically created. You’ll be able to contact the NodePort Service, from outside the cluster, by requesting <NodeIP>:<NodePort>.
+
+
+# Creating two containous/whoami Pods:
+
+# kubectl run whoami1 --image=containous/whoami --port 80 --labels="app=whoami"
+# pod/whoami1 created
+# kubectl run whoami2 --image=containous/whoami --port 80 --labels="app=whoami"
+# pod/whoami2 created
+
+# ~/nodeport-whoami.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodeport-whoami
+spec:
+  type: NodePort
+  selector:
+    app: whoami
+  ports:
+  - nodePort: 30001
+    port: 80
+    targetPort: 80
+
+
+# The ClusterIP Service 
+
+# The ClusterIP Service is the default Kubernetes Service. It exposes the Service on a cluster-internal IP. You can reach the Service from within the cluster, but not from outside the cluster. The Service is only reachable from within the cluster.
+
+# How do I know if I need NodePort or ClusterIP Services to expose my Pods?
+
+# If you need to expose your Pods to the outside world, you should use a NodePort Service. If you only need to expose your Pods to other Pods in the cluster, you should use a ClusterIP Service.
+
+# clusterip-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-clusterip
+spec:
+  type: ClusterIP # Indicates that the service is a ClusterIP
+  ports:
+    - port: 80 # The port exposed by the service
+      protocol: TCP
+      targetPort: 80 # The destination port on the pods
+  selector:
+    run: nginx-clusterip # The label that the service selects pods by
+
+
+
+
+# headless Services 
+
+# A headless Service is a Service with a ClusterIP of None. It doesn’t load-balance traffic or provide a stable IP. Instead, it returns the IP of the Pods directly. You can use headless Services for stateful applications, such as databases, where each Pod has a unique identity.
+
+# clusterip-headless.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-clusterip-headless
+spec:
+  clusterIP: None
+  type: ClusterIP # Indicates that the service is a ClusterIP
+  ports:
+  - port: 80 # The port exposed by the service
+    protocol: TCP
+    targetPort: 80 # The destination port on the pods
+  selector:
+    run: nginx-clusterip   
+
+
+# helpful when you want to build connectivity with clustered stateful Services such as Lightweight Directory Access Protocol (LDAP). In that case, you may want to use an LDAP client that will have access to the different DNS names of the Pods hosting the LDAP server, and this can’t be done with a normal ClusterIP Service since it will bring both a static IP and Kubernetes’ implementation of load balancing. Let’s now briefly introduce another type of Service called LoadBalancer.
+
+
+# LoadBalancer Services
+
+# A LoadBalancer Service exposes the Service externally using a cloud provider’s load balancer. The cloud provider will provision a load balancer for the Service, and the external traffic will be routed to the Service. You can use LoadBalancer Services to expose your Services to the internet.
+
+# loadbalancer-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-loadbalancer
+spec:
+  type: LoadBalancer # Indicates that the service is a LoadBalancer
+  ports:
+    - port: 80 # The port exposed by the service
+      protocol: TCP
+      targetPort: 80 # The destination port on the pods
+  selector:
+    run: nginx-loadbalancer # The label that the service selects pods by
+
+
+#ExternalName Services
+
+# An ExternalName Service maps a Service to a DNS name. It doesn’t have selectors, and it’s used to map a Service to an external DNS name. You can use ExternalName Services to map a Service to an external service, such as a database service hosted outside the cluster.
+
+#ExternalName Services are a powerful way to connect your Kubernetes cluster to external resources like databases, APIs, or Services hosted outside the cluster. They work by mapping a Service in your cluster to a DNS name instead of Pods within the cluster. This allows your applications inside the cluster to seamlessly access the external resource without needing to know its IP address or internal details.
+
+# externalname-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-db
+  namespace: prod
+spec:
+  type: ExternalName
+  externalName: app-db.database.example.com
