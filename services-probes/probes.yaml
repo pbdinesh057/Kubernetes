@@ -1,0 +1,160 @@
+# Probes in kubernetes are used to determine the health of a container. If a probe fails, the container will be restarted.
+
+# When you create a Service to expose an application running inside Pods, Kubernetes doesn’t automatically verify the health of that application. The Pods may be up and running, but the application itself could still have issues, and the Service will continue to route traffic to it. This could result in users or other applications receiving errors or no response at all. To prevent this, Kubernetes provides health check mechanisms called probes.
+
+# 2 types of probes:  
+# Liveness probe: Indicates whether the container is running. If the liveness probe fails, the container will be restarted.
+
+#LivenessProbe resembles ReadinessProbe a lot. In fact, if you have used any cloud providers before, you might already have heard about something called health checks. LivenessProbe is basically a health check.
+
+# Liveness probes are used to determine whether a Pod is in a broken state or not, and the usage of LivenessProbe is especially suited for long-running processes such as web services. Imagine a situation where you have a Service forwarding traffic to three Pods and one of them is broken. Services cannot detect that on their own, and they will just continue to serve traffic to the three Pods, including the broken one. In such situations, 33% of your requests will inevitably lead to an error response, resulting in a poor UX, and you will have no idea why this is happening.
+
+# HTTP livenessProbe
+# nginx-pod-with-liveness-http.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-with-liveness-http
+spec:
+  containers:
+    - name: nginx-pod-with-liveness-http
+      image: nginx
+      livenessProbe:
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        httpGet:
+          path: /healthcheck
+          port: 80
+          httpHeaders:
+            - name: My-Custom-Header
+              value: My-Custom-Header-Value
+
+
+# Command livenessProbe
+# nginx-pod-with-liveness-command.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-with-liveness-command
+spec:
+  containers:
+    - name: nginx-pod-with-liveness-command
+      image: nginx
+      livenessProbe:
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        exec:
+          command:
+            - cat
+            - /hello/world 
+
+
+# TCP livenessProbe
+# nginx-pod-with-liveness-tcp.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-with-liveness-tcp
+spec:
+  containers:
+    - name: nginx-pod-with-liveness-tcp
+      image: nginx
+      livenessProbe:
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        tcpSocket:
+          port: 80
+
+
+# Using named Port with TCP and HTTP livenessProbe
+# nginx-pod-with-liveness-http-named-port.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-with-liveness-http-named-port
+spec:
+  containers:
+    - name: nginx-pod-with-liveness-http-named-port
+      image: nginx
+      ports:
+        - name: liveness-port
+          containerPort: 8080
+          hostPort: 8080
+      livenessProbe:
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        httpGet:
+          path: /healthcheck
+          port: liveness-port # the liveness-port has been defined under the ports section and used under the httpGet for livenessProbe
+
+
+
+
+# 2. Readiness probe: Indicates whether the container is ready to serve traffic. If the readiness probe fails, the container will be removed from Service endpoints.
+# When a Pod is configured with a readiness probe, it can send a signal to the control plane that it is not ready to receive traffic, and when a Pod is not ready, Services won’t forward any traffic to it. This is useful when you have a Pod that needs to perform some initialization before it can serve traffic.
+
+# ReadinessProbe can be of three different types, as outlined here:
+
+# Command: Issue a command inside the pod that should complete with exit code 0, indicating the Pod is ready.
+# HTTP: An HTTP request that should complete with a response code >= 200 and < 400, which indicates the Pod is ready.
+# TCP: Issue a TCP connection attempt. If the connection is established, the Pod is ready.
+
+
+# nginx-pod-with-readiness-http.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-with-readiness-http
+spec:
+  containers:
+    - name: nginx-pod-with-readiness-http
+      image: nginx
+      readinessProbe:
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        httpGet:
+          path: /ready # In our case, our ReadinessProbe will run an HTTP call against the /ready path. If this request receives an HTTP response code >= 200 and < 400, then the probe will be a success, and the Pod will be considered healthy.
+          port: 80
+
+
+
+
+
+# startupProbe
+# The startupProbe is a new feature in Kubernetes 1.16. It is similar to the livenessProbe, but it is only executed once when the Pod starts. The startupProbe is useful for applications that have a long startup time and need to perform some initialization before they can serve traffic. If the startupProbe fails, the Pod will be restarted.
+
+# nginx-pod-with-startupprobe.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-with-startupprobe
+spec:
+  containers:
+    - name: nginx-pod-with-startupprobe
+      image: nginx
+      ports:
+        - name: liveness-port
+          containerPort: 8080
+          hostPort: 8080
+      livenessProbe:
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        httpGet:
+          path: /healthcheck
+          port: liveness-port
+      startupProbe: # The startupProbe will be executed
+        httpGet:
+          path: /healthz
+          port: liveness-port
+        failureThreshold: 30 # The startupProbe will be considered a failure after 30 seconds if the Pod is not ready
+        periodSeconds: 10
+
+
+
+
+initialDelaySeconds: The number of seconds to wait before the first probe execution.
+periodSeocnds: The number of seconds between two probes.
+timeoutSeconds: The number of seconds to wait before timeout.
+successThreshold: The number of successful attempts to consider a Pod is ready (for ReadinessProbe) or healthy (for LivenessProbe).
+failureThreshold: The number of failed attempts to consider a Pod is not ready (for ReadinessProbe) or ready to be killed (for LivenessProbe).
+TerminationGracePeriodSeconds: Give containers a grace period to shut down gracefully before being forcefully stopped (default inherits Pod-level value).
