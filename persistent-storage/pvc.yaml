@@ -1,0 +1,111 @@
+# Splitting storage creation and storage consumption
+
+# The key to understanding the difference between PersistentVolume and PersistentVolumeClaim is to understand that one is meant to represent the storage itself, whereas the other one represents the request for storage that a Pod makes to get the actual storage.
+
+# The very first thing to do is create the PersisentVolume object that will be a hostPath type. Here is the YAML file to do that. Please note that we created this PersisentVolume object with some arbitrary labels in the metadata section. This is so that it will be easier to fetch it from the PersistentVolumeClaim object later:
+
+# pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: my-hostpath-pv
+  labels:
+    type: hostpath
+    env: prod
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/tmp/test"
+  storageClassName: slow
+
+
+# pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: my-hostpath-pv
+  labels:
+    type: hostpath
+    env: prod
+spec:
+  persistentVolumeReclaimPolicy: Retain
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/tmp/test" # This is the path on the host machine where the storage will be created
+  storageClassName: slow
+
+
+# Now, we need to create two things to mount the PersisentVolume object:
+
+# A PersistentVolumeClaim object that targets this specific PersisentVolume object
+# A Pod to use the PersistentVolumeClaim object
+# To demonstrate the namespace scoped items and cluster scoped items, let us create a namespace for the PVC and Pod (refer to the pv-ns.yaml file):
+
+# pv-ns.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    project: pv-ns
+  name: pv-ns
+
+# Now, let us create the PersistentVolumeClaim object that targets the PersisentVolume object we created earlier in namespace pv-ns.
+---
+# pvc.yaml  
+apiVersion: v1 
+kind: PersistentVolumeClaim
+metadata:
+  name: my-hostpath-pvc
+  namespace: pv-ns
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  selector:
+    matchLabels:
+      type: hostpath
+      env: prod
+  storageClassName: slow
+
+
+# pod to use the PVC
+
+# pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: pv-ns
+spec:
+  containers:
+    - image: nginx
+      name: nginx
+      volumeMounts:
+        - mountPath: "/var/www/html"
+          name: mypersistentvolume
+  volumes:
+    - name: mypersistentvolume
+      persistentVolumeClaim:
+        claimName: my-hostpath-pvc
+
+
+# reclaim policy
+
+# The reclaim policy is a field in the PersistentVolume object that specifies what should happen to the storage when the PersistentVolumeClaim object is deleted. There are three possible values for the reclaim policy:
+
+# Retain: The storage is not deleted when the PersistentVolumeClaim object is deleted. The storage is retained so that it can be reused by another PersistentVolumeClaim object.
+
+# Delete: The storage is deleted when the PersistentVolumeClaim object is deleted. The storage is deleted so that it cannot be reused by another PersistentVolumeClaim object.
+
+# Recycle: The storage is deleted when the PersistentVolumeClaim object is deleted. The storage is deleted, but it is not deleted completely. The storage is recycled so that it can be reused by another PersistentVolumeClaim object.
+
+# The default value for the reclaim policy is Delete. If you want to change the reclaim policy, you can do so by specifying the reclaimPolicy field in the PersistentVolume object. Here is an example of how to change the reclaim policy to Retain:

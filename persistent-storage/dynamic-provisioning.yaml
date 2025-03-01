@@ -1,0 +1,142 @@
+# static and dynamic PersistentVolume provisioning
+
+# # A. Static Provisioning  
+# # Static provisioning is the process of creating PersistentVolumes (PVs) manually and then binding them to PersistentVolumeClaims (PVCs) which is time-consuming and error-prone wnhen there are 100s of PVs and PVCs and it's hectic to manually create pv and pvc for each usage.
+
+# # B. Dynamic Provisioning
+# # Dynamic provisioning is the process of automatically creating PersistentVolumes (PVs) when a PersistentVolumeClaim (PVC) is created. This is done by using StorageClasses. StorageClasses are used to define the type of storage that should be used for the PVC. When a PVC is created, the StorageClass automatically creates a PV based on the requirements specified in the PVC.
+
+kubectl get storageclass
+kubectl get storageclasses
+kubectl get sc
+
+# intro to CSI
+# CSI (Container Storage Interface) is a standard for exposing storage systems to containerized workloads. It allows storage vendors to develop plugins that can be used with any container orchestration platform that supports CSI. Kubernetes has built-in support for CSI, which allows you to use any storage system that has a CSI driver.
+
+
+# Install and configure StorageClass and provisioner: The administrator installs a CSI driver (or in-tree provisioner) and configures a StorageClass, which defines the storage type, parameters, and reclaim policy.
+
+# Developer creates PVC with StorageClass information: The developer creates a PersistentVolumeClaim, specifying the desired size and access mode and referencing the StorageClass to request dynamic provisioning.
+
+# The StorageClass/CSI driver triggers a request to the backend provisioner: Kubernetes automatically triggers the CSI driver (or provisioner) when it detects the PVC, sending the request to provision storage from the backend storage system.
+
+# Provisioner communicates with backend storage and creates the volume: The provisioner communicates with the backend storage system, creates the volume, and generates a PersistentVolume in Kubernetes that binds to the PVC.
+
+# The PVC is mounted to the Pod, allowing storage access: The PVC is mounted to the requesting Pod, allowing the Pod to access the storage as specified by the volumeMount in the Pod’s configuration.
+
+
+# enabling hostpath storage for testing purpose
+# Create a namespace for the provisioner
+# kubectl create namespace hostpath-provisioner
+
+# Install using Helm (recommended approach)
+# helm repo add rimusz https://charts.rimusz.net
+# helm repo update
+# helm install hostpath-provisioner rimusz/hostpath-provisioner \
+#   --namespace hostpath-provisioner \
+#   --set nodeHostPath=/var/hostpath-provisioner
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: hostpath
+provisioner: hostpath
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+
+---
+# pvc-dynamic.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-hostpath-pvc
+  namespace: hostpath-provisioner
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: hostpath
+
+# pv is created dynamically
+
+controlplane ~ ➜  kubectl describe pv pvc-c346ed07-11f6-4479-ae5d-467fb28e7bec
+Name:            pvc-c346ed07-11f6-4479-ae5d-467fb28e7bec
+Labels:          <none>
+Annotations:     hostPathProvisionerIdentity: node01
+                 pv.kubernetes.io/provisioned-by: hostpath
+Finalizers:      [kubernetes.io/pv-protection]
+StorageClass:    hostpath
+Status:          Bound
+Claim:           hostpath-provisioner/my-hostpath-pvc
+Reclaim Policy:  Delete
+Access Modes:    RWO
+VolumeMode:      Filesystem
+Capacity:        1Gi
+Node Affinity:   <none>
+Message:         
+Source:
+    Type:          HostPath (bare host directory volume)
+    Path:          /var/hostpath-provisioner/pvc-c346ed07-11f6-4479-ae5d-467fb28e7bec
+    HostPathType:  
+Events:            <none>
+
+
+---
+#pod-dynamic.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-hostpath-pod
+  namespace: hostpath-provisioner
+spec:
+  volumes:
+  - name: my-hostpath-volume
+    persistentVolumeClaim:
+      claimName: my-hostpath-pvc
+  containers:
+  - name: my-hostpath-container
+    image: nginx
+    volumeMounts:
+    - name: my-hostpath-volume
+      mountPath: /usr/share/nginx/html
+
+# kubectl command to write test data to the volume
+# kubectl exec my-hostpath-pod -n hostpath-provisioner -- /bin/sh -c "echo 'Hello, World' > /usr/share/nginx/html/index.html"
+
+
+
+CSI volume cloning and volume snapshots:
+CSI introduces a powerful feature: volume cloning. This functionality allows you to create an exact copy of an existing PersistentVolumeClaim as a new PVC. This is useful when you need to create multiple copies of a volume for testing, development, or backup purposes.
+
+# pv-cloning.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cloned-pvc
+  namespace: mynamespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: custom-storage-class
+  resources:
+    requests:
+      storage: 5Gi
+  dataSource: # This is the key to cloning a volume
+    kind: PersistentVolumeClaim
+    name: original-pvc # The name of the PVC to clone
+
+
+# Learning how to expand PersistentVolumeClaim
+
+# To enable PVC expansion for a specific StorageClass, you need to set the allowVolumeExpansion field to true within the StorageClass definition. This flag controls whether PVCs referencing this StorageClass can request more storage space: 
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: expadable-sc
+provisioner: vendor-name.example/magicstorage
+...<removed for brevity>...
+allowVolumeExpansion: true

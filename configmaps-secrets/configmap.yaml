@@ -212,8 +212,53 @@ immutable: true
 
 
 
+mounting cm as volume in a pod:
 
 
+
+# nginx-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-hello
+  labels:
+    app: test
+immutable: false
+data:
+  hello1.html: |
+    <html>
+      hello world 1
+    </html>
+  hello2.html: |
+    <html>
+      hello world 2
+    </html>
+
+
+
+# nginx-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-hello
+  labels:
+    app: test
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.14.2
+      ports:
+        - containerPort: 80
+      volumeMounts:
+        - name: nginx-hello
+          mountPath: "/usr/share/nginx/html/hello"
+  volumes:
+    - name: nginx-hello
+      configMap:
+        name: nginx-hello
+
+
+################################SECRETS######################################
 
 Managing sensitive configuration with the Secret object:
 

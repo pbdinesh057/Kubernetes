@@ -1,0 +1,301 @@
+# Basics
+
+
+mounting cm as volume in a pod:
+
+
+# nginx-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-hello
+  labels:
+    app: test
+immutable: false
+data:
+  hello1.html: |
+    <html>
+      hello world 1
+    </html>
+  hello2.html: |
+    <html>
+      hello world 2
+    </html>
+
+---
+# nginx-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-hello
+  labels:
+    app: test
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.14.2
+      ports:
+        - containerPort: 80
+      volumeMounts:
+        - name: nginx-hello
+          mountPath: "/usr/share/nginx/html/hello"
+  volumes:
+    - name: nginx-hello
+      configMap:
+        name: nginx-hello
+
+#  one limitation of these objects is the amount of data you can store. Since it depends on the etcd datastore, to avoid performance issues, the limitation is 1.5 MB. If you need to store more data, you can use a Secret object, which has a limit of 1 MB.
+
+
+
+
+# Ephemeral Storage (Data is lost if the pod restarts)
+
+# EmptyDir
+# ConfigMap & Secret
+# CSI Ephemeral Volumes
+# Persistent Storage (Data persists even if the pod restarts)
+
+# Persistent Volumes (PVs) & Persistent Volume Claims (PVCs)
+# StorageClasses for dynamic provisioning
+
+
+# A. Fibre Channel (FC) Storage
+# FC is a high-performance block storage protocol commonly used in enterprise environments.
+
+# What is Needed to Configure Fibre Channel in Kubernetes?
+# Fibre Channel SAN Setup
+
+# You need a Fibre Channel Storage Array.
+# The Kubernetes nodes must have FC HBAs (Host Bus Adapters) connected to the SAN fabric.
+# Enable FC Support in Kubernetes
+
+# The Kubernetes nodes should have FC utilities installed (scsi_id, multipath-tools).
+# The FC storage should be configured to allow access from Kubernetes nodes.
+# Define a Persistent Volume (PV) for FC
+
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: fc-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  fc:
+    targetWWNs: ["50060e801049cfd1"]
+    lun: 2
+    fsType: ext4
+    readOnly: false 
+
+
+# Define a Persistent Volume Claim (PVC) for FC
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fc-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+# Define a Pod that uses the FC PVC
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fc-pod
+spec:
+  containers:
+    - name: my-container
+      image: busybox
+      volumeMounts:
+        - mountPath: "/mnt/data"
+          name: fc-storage
+  volumes:
+    - name: fc-storage
+      persistentVolumeClaim:
+        claimName: fc-pvc
+
+
+
+# B. NFS (Network File System) Storage
+# NFS is a file-based shared storage system that allows multiple pods to access the same data.
+
+# What is Needed to Configure NFS in Kubernetes?
+# NFS Server Setup
+
+# An external NFS server must be running and exporting a shared directory.
+
+# mkdir /export/k8s
+# chmod 777 /export/k8s
+# echo "/export/k8s *(rw,sync,no_root_squash)" >> /etc/exports
+# exportfs -a
+
+
+# Define a Persistent Volume (PV) for NFS
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 192.168.1.100  # Replace with your NFS server IP
+    path: "/export/k8s"
+
+
+# Define a Persistent Volume Claim (PVC) for NFS
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+# Define a Pod that uses the NFS PVC
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nfs-pod
+spec:
+  containers:
+    - name: my-container
+      image: busybox
+      volumeMounts:
+        - mountPath: "/mnt/data"
+          name: nfs-storage
+  volumes:
+    - name: nfs-storage
+      persistentVolumeClaim:
+        claimName: nfs-pvc
+
+
+
+
+# PersistentVolumes objects are just entries within the etcd datastore, and they are not actual disks on their own.
+
+# PersistentVolume is just a kind of pointer within Kubernetes to a piece of storage, such as an NFS, a disk, an Amazon Elastic Block Store (EBS) volume, and more. This is so that you can access these technologies from within Kubernetes and in a Kubernetes way.
+
+
+# Introducing PersistentVolume types
+# There are several types of PersistentVolumes in Kubernetes, such as:
+
+# Amazon EBS volumes
+# Amazon Elastic File System (EFS) filesystems
+# Google GCE Persistent Disk (PD)
+# Microsoft Azure disks
+
+
+# Here are some of the backend technologies supported by Kubernetes out of the box:
+
+# csi: Container Storage Interface (CSI)
+# fc: FC storage
+# iscsi: SCSI over IP
+# local: Using local storage
+# hostPath: HostPath volumes
+# nfs: Regular network file storage
+
+
+# following PersistentVolume types are either removed or deprecated in Kubernetes 1.29 onwards:
+
+# awsElasticBlockStore – Amazon EBS
+# azureDisk – Azure Disk
+# azureFile – Azure File
+# portworxVolume – Portworx volume
+# flexVolume – FlexVolume
+# vsphereVolume – vSphere VMDK volume
+# cephfs – CephFS volume
+# cinder
+
+
+Introducing PersistentVolume access modes:
+
+access modes are an option you can set when you create a PersistentVolume. The access modes are:
+
+ReadWriteOnce (RWO): This volume allows read/write by only one node at the same time.
+ReadOnlyMany (ROX): This volume allows read-only mode by many nodes at the same time.
+ReadWriteMany (RWX): This volume allows read/write by multiple nodes at the same time.
+ReadWriteOncePod: This is a new mode introduced recently and is already stable in the Kubernetes 1.29 version. In this access mode, the volume is mountable as read-write by a single Pod. Employ the ReadWriteOncePod access mode when you want only one Pod throughout the entire cluster to have the capability to read from or write to the Persistent Volume Claim (PVC).
+
+
+# File vs. block storage:
+
+# File storage (like Network File System (NFS) or Common Internet File System (CIFS)) allows multiple clients to access the same files concurrently. This is why file storage systems can support a variety of access modes, such as RWO, ROX, and RWX. They are built to handle multi-client access over a network, enabling several nodes to read and write from the same volume without data corruption.
+
+
+# Block storage (like local storage or hostPath) is fundamentally different. Block storage is designed for one client to access at a time because it deals with raw disk sectors rather than files. Concurrent access by multiple clients would lead to data inconsistency or corruption. For this reason, block storage supports only the RWO mode, where a single node can both read and write to the volume.
+
+
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-hostpath
+  labels:
+    type: local
+spec:
+  storageClassName: manual # manual is the default StorageClass takes storage from the local node, hostPath
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data" # path on the host node
+
+
+#  creating a PersistentVolume using NFS as the backend:
+
+
+# pv-nfs.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-nfs
+spec:
+  capacity:
+    storage: 5Gi
+  volumeMode: Filesystem 
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Recycle
+  storageClassName: slow 
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+  nfs:
+    path: /appshare
+    server: nfs.example.com
+
+
+
+# Creating PersistentVolume with raw block volume
+
+# pv-block.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-block
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Block
+  persistentVolumeReclaimPolicy: Retain # Retain, Recycle, Delete
+  fc:
+    targetWWNs: ["50060e801049cfd1"]
+    lun: 0
+    readOnly: false
