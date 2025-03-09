@@ -129,6 +129,8 @@ spec:
 
 # A headless Service is a Service with a ClusterIP of None. It doesn’t load-balance traffic or provide a stable IP. Instead, it returns the IP of the Pods directly. You can use headless Services for stateful applications, such as databases, where each Pod has a unique identity.
 
+# it direects traffic to all the pods in the service without load balancing, mainly used for stateful applications like databases for writing and reading data from database pods.
+
 # clusterip-headless.yaml
 apiVersion: v1
 kind: Service

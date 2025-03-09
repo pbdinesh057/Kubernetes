@@ -1,0 +1,140 @@
+# what is replica-set?
+# ReplicaSet ensures that a specified number of pod replicas are running at any given time.
+
+# nginx-replicaset-example.yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-replicaset-example
+  namespace: rs-ns
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: nginx
+      environment: test
+  template:
+    metadata:
+      labels:
+        app: nginx
+        environment: test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.17
+          ports:
+            - containerPort: 80
+
+
+# advanced selectors
+
+...<removed for brevity>...
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: nginx
+    matchExpressions:
+      - key: environment
+        operator: In
+        values:
+          - test
+          - dev
+  template:
+...<removed for brevity>...
+
+---
+Be careful with labels on bare Pods (Pods without a ReplicaSet manager). ReplicaSets can take control of any Pod with matching labels, potentially causing them to manage your bare Pod unintentionally. Use unique labels for bare Pods to avoid conflicts.
+
+---
+# nginx-pod-bare.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod-bare-example
+  namespace: rs-ns
+  labels:
+    app: nginx
+    environment: test
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.17
+      ports:
+        - containerPort: 80\
+
+
+
+Testing HA and FT with a ReplicaSet:
+
+---
+# nginx-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  namespace: rs-ns
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  # type: LoadBalancer # or NodePort for local testing
+
+
+ # kubectl port-forward svc/nginx-service 8080:80 -n rs-ns 
+
+
+ #testing replicaset using Liveness probe
+
+ ---
+ # nginx-replicaset-livenessprobe.yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-replicaset-livenessprobe-example
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+      environment: test
+  template:
+    metadata:
+      labels:
+        app: nginx
+        environment: test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.17
+          ports:
+            - containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 2
+            periodSeconds: 2
+
+
+kubectl exec -it nginx-replicaset-livenessprobe-example-lgvqv -- rm /usr/share/nginx/html/index.html:
+
+
+kubectl describe pod/nginx-replicaset-livenessprobe-example-lgvqv
+Name:             nginx-replicaset-livenessprobe-example-lgvqv
+...<removed for brevitt>...
+Events:
+  Type     Reason     Age                 From               Message
+  ----     ------     ----                ----               -------
+  Normal   Scheduled  2m9s                default-scheduler  Successfully assigned default/nginx-replicaset-livenessprobe-example-lgvqv to kind-worker2
+  Normal   Pulled     60s (x2 over 2m8s)  kubelet            Container image "nginx:1.17" already present on machine
+  Normal   Created    60s (x2 over 2m8s)  kubelet            Created container nginx
+  Normal   Started    60s (x2 over 2m8s)  kubelet            Started container nginx
+  Warning  Unhealthy  60s (x3 over 64s)   kubelet            Liveness probe failed: HTTP probe failed with statuscode: 403
+  Normal   Killing    60s                 kubelet            Container nginx failed liveness probe, will be restarted
+
+
+the liveness probe has correctly detected that the web server became unhealthy and restarted the container inside the Pod.

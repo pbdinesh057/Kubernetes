@@ -1,0 +1,181 @@
+# what is Deployments?
+
+# Deployment object, which provides easy scalability, rolling updates, and versioned rollbacks for your stateless Kubernetes applications and services. Deployment objects are built on top of ReplicaSets and they provide a declarative way of managing them.
+
+# what are stateful applications?
+# stateful applications are those that require persistent storage to maintain their state across restarts and rescheduling. Stateful applications include databases, key-value stores, and other applications that store data on disk.
+eg: MySQL, PostgreSQL, MongoDB, Cassandra, and Redis.
+
+# what are stateless applications?
+# Stateless applications are those that do not require persistent storage to maintain their state across restarts and rescheduling. Stateless applications include web servers, load balancers, and other applications that do not store data on disk.
+eg: Nginx, Apache, HAProxy, and other web servers and load balancers.
+
+# kubectl create deployment my-deployment --replicas=1 --image=my-image:latest --dry-run=client --port=80 -o yaml
+
+---
+# nginx-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment-example
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+      environment: test
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+        environment: test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.17
+          ports:
+            - containerPort: 80
+
+
+# add an annotation to the Deployment manually using the kubectl annotate command, as follows:
+
+# $ kubectl annotate deployment/ nginx-deployment-example kubernetes.io/change-cause='Updated image to 1.2.3'
+
+# $ kubectl rollout status deployment nginx-deployment-example
+# Waiting for deployment "nginx-deployment-example" rollout to finish: 0 of 3 updated replicas are available...
+# deployment "nginx-deployment-example" successfully rolled out
+
+---
+# nginx-deployment-readinessprobe.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment-readiness
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+      environment: test
+  minReadySeconds: 10 # wait for 10 seconds before marking the pod as ready
+  strategy:
+    type: RollingUpdate 
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+        environment: test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25.4
+          ports:
+            - containerPort: 80
+          command:
+            - /bin/sh
+            - -c
+            - |
+              touch /usr/share/nginx/html/ready
+              echo "You have been served by Pod with IP address: $(hostname -i)" > /usr/share/nginx/html/index.html
+              nginx -g "daemon off;"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 2
+
+# There are multiple parts changing in the Deployment manifest, all of which have been highlighted. First, we have overridden the default container entry point command using command and passed additional arguments. command is set to /bin/sh to execute a custom shell command. The additional arguments are constructed in the following way:
+
+# -c is an argument for /bin/sh that instructs it that what follows is a command to be executed in the shell.
+
+# touch /usr/share/nginx/html/ready is the first command that’s used in the container shell. This will create an empty ready file that can be served by nginx on the /ready endpoint.
+
+# echo "You have been served by Pod with IP address: $(hostname -i)" > /usr/share/nginx/html/index.html is the second command that sets the content of index.html to information about the internal cluster Pod’s IP address. hostname -i is the command that’s used to get the container IP address. This value will be different for each Pod running in our Deployment.
+
+# nginx -g "daemon off;": Finally, we execute the default entrypoint command for the nginx:1.25.4 image. This will start the nginx web server as the main process in the container.
+
+# The probe is of the httpGet type and executes an HTTP GET request to the /ready HTTP endpoint on port 80 of the container.
+
+# initialDelaySeconds: This is set to 5 seconds and configures the probe to start querying after 5 seconds from container start.
+
+# periodSeconds: This is set to 2 seconds and configures the probe to query in 2-second intervals.
+
+# timeoutSeconds: This is set to 10 seconds and configures the number of seconds, after which the HTTP GET request times out.
+
+# successThreshold: This is set to 1 and configures the minimum number of consecutive success queries of the probe before it is considered to be successful once it has failed.
+
+# failureThreshold: This is set to 2 and configures the minimum number of consecutive failed queries of the probe before it is considered to have failed. Setting it to a value that’s greater than 1 ensures that the probe is not providing false positives.
+
+How Kubernetes Deployments seamlessly handle revisions and version rollouts:
+
+# RollinUpdate strategy:
+
+# The RollingUpdate strategy is the default strategy for Deployments. It ensures that the Deployment is updated in a controlled manner, one Pod at a time. The strategy is defined by the maxUnavailable and maxSurge fields.
+# The number of Pods that may be unavailable (readiness probe failing) is controlled using the .spec.strategy.rollingUpdate.maxUnavailable parameter.
+
+# Recreate strategy:
+# The Recreate strategy is another strategy that can be used with Deployments. It is a simpler strategy that deletes all the Pods in the Deployment before creating new ones. This strategy is not recommended for production workloads, as it may cause downtime during the update process.
+
+# nginx-deployment-readinessprobe.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment-readiness
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+      environment: test
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+        environment: test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.17
+          ports:
+            - containerPort: 80
+          command:
+            - /bin/sh
+            - -c
+            - |
+              touch /usr/share/nginx/html/ready
+              echo "You have been served by Pod with IP address: $(hostname -i)" > /usr/share/nginx/html/index.html
+              nginx -g "daemon off;"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 2
+
+
+kubectl set image deployment nginx-deployment-example nginx=nginx:1.18:
+kubectl rollout history deployment.apps/nginx-deployment-rollingupdate:
+kubectl rollout pause deployment nginx-deployment-example:
+kubectl rollout resume deployment nginx-deployment-example:

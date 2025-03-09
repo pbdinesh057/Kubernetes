@@ -1,0 +1,281 @@
+# stateful set is used to manage stateful applications like databases, key-value stores, and other applications that store data on disk.
+
+# # what is stateful applications?
+# # stateful applications are those that require persistent storage to maintain their state across restarts and rescheduling. Stateful applications include databases, key-value stores, and other applications that store data on disk.
+# eg: MySQL, PostgreSQL, MongoDB, Cassandra, and Redis.
+
+# StatefulSet and how it differs from a Deployment object
+# StatefulSet is used to manage stateful applications like databases and key-value stores.
+# It provides guarantees about the ordering and uniqueness of Pods.
+# Unlike Deployments, StatefulSets maintain a unique, persistent identity for each Pod.
+# This includes stable Pod names and cluster DNS names, even during rescheduling or rollouts.
+# StatefulSets use volumeClaimTemplates for dynamic PVC creation, ensuring fully dynamic storage provisioning.
+# Note: Cluster IP addresses of Pods in a StatefulSet are not guaranteed to stay the same, use cluster DNS names for connections.
+
+
+# StatefulSet ensures a deterministic (sticky) name for Pods, which consists of <statefulSetName>-<ordinal>. For Deployments, you would have a random name consisting of <deploymentName>-<podTemplateHash>-<randomHash>.
+# For StatefulSet objects, the Pods are started and terminated in a specific and predictable order that ensures consistency, stability, and coordination while scaling the ReplicaSet. Let us take the preceding example diagram of MySQL StatefulSet; the Pods will be created in sequential order (mysql-0, mysql-1, and mysql-2). When you scale down the StatefulSet, the Pods will be terminated in the reverse order – mysql-2, mysql-1, and mysql-0 at the end.
+# In terms of storage, Kubernetes creates PVCs based on volumeClaimTemplates of the StatefulSet specification for each Pod in the StatefulSet and always attaches this to the Pod with the same name. For Deployment, if you choose to use persistentVolumeClaim in the Pod template, Kubernetes will create a single PVC and attach the same to all the Pods in the deployment. This may be useful in certain scenarios but is not a common use case.
+# You need to create a headless Service object that is responsible for managing the deterministic network identity (cluster DNS names) for Pods. The headless Service allows us to return all Pods’ IP addresses behind the service as DNS A records instead of a single DNS A record with a ClusterIP Service. A headless Service is only required if you are not using a regular service. The specification of StatefulSet requires having the Service name provided in .spec.serviceName. Refer to Understanding headless services in Chapter 8, Exposing Your Pods with Services.
+
+
+
+# Data management in StatefulSet:
+# - Data Cloning: Use init containers or application features (e.g., MySQL replication).
+# - Remote Storage: Use storage classes that replicate data or network-attached storage.
+# - External Backups: Implement external backup solutions (e.g., cloud storage).
+
+Example Init Container for Data Cloning:
+initContainers:
+- name: clone-data
+  image: busybox
+  command: ['sh', '-c', 'cp /source-data/* /var/lib/mysql']
+
+Example Storage Class:
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast
+provisioner: kubernetes.io/gce-pd
+parameters:
+  type: pd-ssd
+
+# Example External Backup:
+# Use tools like Velero to backup PVs to cloud storage.
+
+
+
+
+# mysql-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-stateful
+  labels:
+    app: mysql
+  namespace: mysql
+spec:
+  serviceName: mysql-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+      environment: test
+  template:
+    metadata:
+      labels:
+        app: mysql
+        environment: test
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.2.0
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_PASSWORD
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: 1Gi
+
+
+---
+# mysql-headless-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless
+  namespace: mysql
+spec:
+  selector:
+    app: mysql
+    environment: test
+  clusterIP: None
+  ports:
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
+
+
+
+#  kubectl apply –f mysql-ns.yaml
+# namespace/mysql created
+
+
+# kubectl create secret generic mysql-secret \
+#   --from-literal=MYSQL_ROOT_PASSWORD='mysqlroot' \
+#   --from-literal=MYSQL_USER='mysqluser' \
+#   --from-literal=MYSQL_PASSWORD='mysqlpassword' \
+#   -n mysql
+# secret/mysql-secret created
+
+
+# kubectl get pod -n mysql
+# NAME               READY   STATUS    RESTARTS   AGE
+# mysql-stateful-0   1/1     Running   0          2m32s
+# mysql-stateful-1   1/1     Running   0          2m29s
+# mysql-stateful-2   1/1     Running   0          2m25s
+
+
+# Each pod will have different PVS in statefulset, why
+# Each Pod in the StatefulSet has its own PVC, which is created based on the volumeClaimTemplates in the StatefulSet specification. This ensures that each Pod has its own unique storage volume. The PVCs are created dynamically by Kubernetes and are attached to the Pods with the same name. This is a key feature of StatefulSets that allows you to manage stateful applications like databases and key-value stores.
+
+
+
+# kubectl get pvc -n mysql
+# NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+# mysql-data-mysql-stateful-0   Bound    pvc-453dbfee-6076-48b9-8878-e7ac6f79d271   1Gi        RWO            standard       <unset>                 8m38s
+# mysql-data-mysql-stateful-1   Bound    pvc-36494153-3829-42aa-be6d-4dc63163ea38   1Gi        RWO            standard       <unset>                 8m35s
+# mysql-data-mysql-stateful-2   Bound    pvc-6730af33-f0b6-445d-841b-4fbad5732cde   1Gi        RWO            standard       <unset>                 8m31s
+
+
+
+
+# $ kubectl get pv
+# NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                               STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+# pvc-36494153-3829-42aa-be6d-4dc63163ea38   1Gi        RWO            Delete           Bound    mysql/mysql-data-mysql-stateful-1   standard       <unset>                          11m
+# pvc-453dbfee-6076-48b9-8878-e7ac6f79d271   1Gi        RWO            Delete           Bound    mysql/mysql-data-mysql-stateful-0   standard       <unset>                          11m
+# pvc-6730af33-f0b6-445d-841b-4fbad5732cde   1Gi        RWO            Delete           Bound    mysql/mysql-data-mysql-stateful-2   standard       <unset>                          11m
+
+
+
+
+We have successfully created the StatefulSet object; now it is time to verify whether it works as expected in a basic scenario. To do this, let us use an updated k8sutils container image with the default MySQL client package installed. (Check Chapter12/Containerfile to see the details of the k8sutils image.) Create k8sutils.yaml as follows:
+
+# k8sutils.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: k8sutils
+  # namespace: default
+spec:
+  containers:
+    - name: k8sutils
+      image: quay.io/iamgini/k8sutils:debian12-1.1
+      command:
+        - sleep
+        - "infinity"
+      # imagePullPolicy: IfNotPresent
+  restartPolicy: 
+  
+
+
+# root@k8sutils:/# mysql -u root -p -h mysql-headless.mysql.svc.cluster.local
+# Enter password: <mysqlroot>
+# Welcome to the MariaDB monitor.  Commands end with ; or \g.
+# Your MySQL connection id is 8
+# Server version: 8.2.0 MySQL Community Server - GPL
+# Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+# Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+# MySQL [(none)]> show databases;
+
+
+
+# Log in to the same k8sutils Pod that we used in the previous test.
+# Perform DNS check for the headless Service, mysql-headless:
+# root@k8sutils:/# nslookup mysql-headless
+# Server:         10.96.0.10
+# Address:        10.96.0.10#53
+# Name:   mysql-headless.mysql.svc.cluster.local
+# Address: 10.244.0.14
+# Name:   mysql-headless.mysql.svc.cluster.local
+# Address: 10.244.0.15
+# Name:   mysql-headless.mysql.svc.cluster.local
+# Address: 10.244.0.16
+
+
+
+# root@k8sutils:/# mysql -u root -p -h mysql-stateful-0.mysql-headless
+# Enter password: <mysqlroot>
+# Welcome to the MariaDB monitor.  Commands end with ; or \g.
+# Your MySQL connection id is 8
+# Server version: 8.2.0 MySQL Community Server - 
+
+
+
+# Let us create a database inside the MySQL database server as follows:
+
+# MySQL [(none)]> create database ststest;
+# Query OK, 1 row affected (0.002 sec)
+# MySQL [(none)]> exit;
+# Bye
+
+# Now, we will show that this DNS name remains unchanged even if a Pod is restarted. The IP of the Pod will change, but the DNS name will not. What is more, the PV that is mounted will also stay the same, but we will investigate this in the next paragraphs. In another shell window, outside of the container, execute the following command to force a restart of the mysql-stateful-0 Pod:
+
+# $ kubectl delete po -n mysql mysql-stateful-0
+
+
+# Check the Pods and you will see that mysql-stateful-0 has been recreated and mounted with the same mysql-data-mysql-stateful-0 PVC:
+
+# $ kubectl get po -n mysql
+# NAME               READY   STATUS    RESTARTS   AGE
+# k8sutils           1/1     Running   0          35m
+# mysql-stateful-0   1/1     Running   0          6s
+# mysql-stateful-1   1/1     Running   0          52m
+# mysql-stateful-2   1/1     Running   0          51m
+
+# In the k8sutils shell, execute the MySQL client command to check the database server content:
+root@k8sutils:/# mysql -u root -p -h mysql-stateful-0.mysql-headless
+Enter password: <mysqlroot>
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MySQL connection id is 8
+Server version: 8.2.0 MySQL Community Server - GPL
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+MySQL [(none)]> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| ststest            |
+| sys                |
++--------------------+
+5 rows in set (0.003 sec)
+
+
+
+State persistence:
+
+# kubectl delete po -n mysql mysql-stateful-0 mysql-stateful-1 mysql-stateful-2
+# pod "mysql-stateful-0" deleted
+# pod "mysql-stateful-1" deleted
+# pod "mysql-stateful-2" deleted
+
+However, there are a few differences when compared to Deployment objects:
+
+When you deploy a StatefulSet object of N replicas, the Pods during deployment are created sequentially, in order from 0 to N-1. In our example, during the creation of a StatefulSet object of three replicas, the first mysql-stateful-0 Pod is created, followed by n mysql-stateful-1, and finally mysql-stateful-2.
+
+When you scale up the StatefulSet, the new Pods are also created sequentially and in an ordered fashion.
+
+When you scale down the StatefulSet, the Pods are terminated sequentially, in reverse order, from N-1 to 0. In our example, while scaling down the StatefulSet object to zero replicas, the mysql-stateful-2 Pod is terminated, followed by mysql-stateful-1, and finally mysql-stateful-0.
+
+During the scaling up of the StatefulSet object, before the next Pod is created in the sequence, all its predecessors must be running and ready.
+
+During the scaling down of the StatefulSet object, before the next Pod is terminated in the reverse sequence, all its predecessors must be completely terminated and deleted.
+
+Also, in general, before any scaling operation is applied to a Pod in a StatefulSet object, all its predecessors must be running and ready. This means that if, during scaling down from four replicas to one replica, the mysql-stateful-0 Pod were to suddenly fail, then no further scaling operation would be performed on the mysql-stateful-1, mysql-stateful-2, and mysql-stateful-3 Pods. Scaling would resume when the mysql-stateful-0 Pod becomes ready again.

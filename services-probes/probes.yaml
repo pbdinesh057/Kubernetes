@@ -9,6 +9,9 @@
 
 # Liveness probes are used to determine whether a Pod is in a broken state or not, and the usage of LivenessProbe is especially suited for long-running processes such as web services. Imagine a situation where you have a Service forwarding traffic to three Pods and one of them is broken. Services cannot detect that on their own, and they will just continue to serve traffic to the three Pods, including the broken one. In such situations, 33% of your requests will inevitably lead to an error response, resulting in a poor UX, and you will have no idea why this is happening.
 
+# if your liveness probe is too restrictive and has timeouts that are too small, it may wrongfully restart your containers and decrease the availability of your application. On the other hand, if your liveness probe is too lenient, it may not detect that your application is in a broken state, and your users will experience errors.
+
+
 # HTTP livenessProbe
 # nginx-pod-with-liveness-http.yaml
 apiVersion: v1
